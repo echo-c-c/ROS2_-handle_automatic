@@ -1,210 +1,229 @@
 # 自主目标检测与控制系统
 
+## 系统环境
+
+- **操作系统**: Ubuntu 20.04
+- **ROS版本**: ROS2 Foxy
+- **Python版本**: Python 3.8+
+- **深度相机**: Orbbec Gemini相机
+
 ## 概述
 
-`automatic.py` 是一个自主系统，旨在使用 ROS2、YOLO 和摇杆输入进行实时目标检测和机器人控制。该系统结合了图像处理、深度感知和基于摇杆的手动控制，能够在预定义环境中执行搜索和操作物体等任务。
+`2.py`是一个基于ROS2 Foxy的自主目标检测与控制系统,主要用于实时物体检测和机器人控制。系统使用Orbbec深度相机获取RGB-D数据,通过YOLO模型进行目标检测,并结合深度信息实现物体的精确定位与抓取。
 
-## 功能
+## 功能特性
 
-- **ROS2 图像订阅**：订阅深度和彩色图像主题，实现实时图像处理。
-- **YOLO 目标检测**：使用 YOLO（You Only Look Once）模型检测和分类摄像头画面中的物体。
-- **摇杆控制**：集成摇杆用于手动控制，允许用户在自动模式和手动模式之间切换。
-- **串口通信**：通过串口与硬件组件通信，根据检测到的对象发送指令。
-- **深度感知**：利用深度图像计算物体距离，以做出智能决策。
-- **任务序列**：执行预定义的动作序列，如抓取和放置物体。
-- **日志与调试**：实现详细的日志记录，便于监控系统性能和排除故障。
+- **深度相机集成**: 
+  - 订阅`/camera/color/image_raw`获取RGB图像
+  - 订阅`/camera/depth/image_raw`获取深度图像
+  - 支持RGB-D点云数据处理
+- **目标检测与跟踪**:
+  - 使用YOLO模型进行实时目标检测
+  - 支持多种颜色物体的识别(红、黄、黑等)
+  - 结合深度信息计算目标距离
+- **控制系统**:
+  - 支持手动/自动模式切换
+  - 通过串口与机器人控制器通信
+  - 支持预设任务序列执行
 
-## 目录
+## 安装步骤
 
-- [安装](#安装)
-- [使用方法](#使用方法)
-- [配置](#配置)
-- [依赖项](#依赖项)
-- [文件结构](#文件结构)
-- [贡献指南](#贡献指南)
-- [许可证](#许可证)
+### 1. ROS2 Foxy安装
 
-## 安装
+```bash
+# 设置语言环境
+sudo apt update && sudo apt install locales
+sudo locale-gen en_US en_US.UTF-8
+sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+export LANG=en_US.UTF-8
 
-### 前提条件
+# 添加ROS2软件源
+sudo apt install software-properties-common
+sudo add-apt-repository universe
+sudo apt update && sudo apt install curl -y
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
 
-- **ROS2**：确保已在系统中安装并正确配置 ROS2。
-- **Python 3.8+**：脚本使用 Python 编写，需 Python 3.8 或更高版本。
-- **串口访问权限**：系统需通过串口与硬件通信（例如 `/dev/ttyUSB0`）。
+# 安装ROS2 Foxy
+sudo apt update
+sudo apt install ros-foxy-desktop python3-argcomplete
+sudo apt install python3-colcon-common-extensions
 
-### 步骤
+# 配置环境
+echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+```
 
-1. **克隆仓库**
+### 2. 深度相机配置
 
-    ```bash
-    git clone https://github.com/yourusername/your-repo.git
-    cd your-repo
-    ```
+```bash
+# 安装相机依赖
+sudo apt install libgflags-dev nlohmann-json3-dev libgoogle-glog-dev \
+    ros-foxy-image-transport ros-foxy-image-publisher
 
-2. **创建虚拟环境**
+# 安装libuvc库
+git clone https://github.com/libuvc/libuvc.git
+cd libuvc
+mkdir build && cd build
+cmake .. && make -j4
+sudo make install
+sudo ldconfig
 
-    推荐使用虚拟环境管理依赖项。
+# 创建相机工作空间
+mkdir -p ~/orbbec_ws/src
+cd ~/orbbec_ws/src
+# 复制Orbbec相机ROS2功能包到src目录
 
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
+# 编译
+cd ~/orbbec_ws
+colcon build
+echo "source ~/orbbec_ws/install/setup.bash" >> ~/.bashrc
 
-3. **安装依赖项**
+# 安装udev规则
+cd ~/orbbec_ws/src/OrbbecSDK_ROS/orbbec_camera/scripts/
+sudo sh install_udev_rules.sh
+```
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+### 3. 项目依赖安装
 
-    *如果没有提供 `requirements.txt`，请手动安装必要的包：*
+```bash
+# 创建项目工作空间
+mkdir -p ~/robot_ws/src
+cd ~/robot_ws/src
+# 复制项目代码到src目录
 
-    ```bash
-    pip install opencv-python rclpy sensor_msgs cv_bridge numpy torch ultralytics pygame pyserial
-    ```
+# 安装Python依赖
+pip install opencv-python numpy torch ultralytics pygame pyserial
 
-4. **设置 ROS2 环境**
+# 编译工作空间
+cd ~/robot_ws
+colcon build
+source install/setup.bash
+```
 
-    确保已 source 你的 ROS2 环境。
+## 使用说明
 
-    ```bash
-    source /opt/ros/<ros2-distro>/setup.bash
-    ```
+### 1. 启动深度相机
 
-    将 `<ros2-distro>` 替换为你的 ROS2 发行版，例如 `humble`。
+```bash
+# 启动相机
+ros2 launch astra_camera gemini.launch.xml
 
-## 使用方法
+# 验证相机话题
+ros2 topic list
+ros2 topic echo /camera/color/image_raw  # 查看彩色图像数据
+ros2 topic echo /camera/depth/image_raw  # 查看深度图像数据
+```
 
-1. **连接硬件**
+### 2. 运行主程序
 
-    - **摄像头**：确保深度和彩色摄像头已连接并发布到相应的 ROS2 主题。
-    - **摇杆**：将摇杆连接到系统。
-    - **串口设备**：将串口设备（例如机器人控制器）连接到指定的串口。
+```bash
+# 确保在robot_ws工作空间下
+cd ~/robot_ws
+source install/setup.bash
 
-2. **运行脚本**
+# 运行程序
+python src/your_package/scripts/2.py
+```
 
-    ```bash
-    python 2.py
-    ```
+### 3. 操作说明
 
-3. **操作模式**
+- **自动/手动模式切换**:
+  - 左肩按钮(LB): 切换到手动模式
+  - 右肩按钮(RB): 切换到自动模式
 
-    - **自动模式**：系统根据 YOLO 检测和深度信息自动检测并与物体互动。
-    - **手动模式**：使用摇杆手动控制机器人动作。按下左或右肩部按钮切换模式。
+- **手动控制**:
+  - 左摇杆: 控制移动方向
+  - A/B/X/Y按钮: 执行预设动作
 
-4. **退出**
+- **自动模式下的任务状态**:
+  - SEARCH_BALL: 搜索目标球体
+  - TASK_TWO: 寻找放置区域
 
-    在显示窗口按 `q` 或在终端中使用 `Ctrl+C` 优雅退出程序。
+## 配置参数说明
 
-## 配置
+### 相机参数
+```python
+# 相机内参
+fx = 476.2635192871094
+fy = 476.2635192871094
+cx = 315.7132873535156
+cy = 199.8099365234375
+```
 
-脚本顶部包含多个可配置参数。根据具体的设置和需求调整这些参数。
+### 任务参数
+```python
+# 搜索颜色优先级
+SEARCH_COLOR = 'red'
+COLOR_PRIORITY = [SEARCH_COLOR, 'yellow', 'black']
 
-### 主要配置参数
+# 距离阈值(米)
+APPROACH_THRESHOLD = 0.25
+EXIT_THRESHOLD = 0.3
+```
 
-- **误差因子和阈值**
+### 动作时序参数
+```python
+# 任务一时序(秒)
+TASK1_STOP_BEFORE_FORWARD = 0.5
+TASK1_FORWARD_TO_GRAB = 0.8
+TASK1_STOP_AFTER_GRAB = 0.5
 
-    ```python
-    ERROR_FACTOR = 6
-    APPROACH_THRESHOLD = 0.25  # 米
-    EXIT_THRESHOLD = 0.3        # 米
-    ```
+# 任务二时序(秒)
+TASK2_STOP_BEFORE_FORWARD = 0.5
+TASK2_FORWARD_TO_PLACE = 0.9
+TASK2_STOP_AFTER_PLACE = 0.5
+```
 
-- **任务序列时间**
+## 故障排除
 
-    ```python
-    TASK1_STOP_BEFORE_FORWARD = 0.5
-    TASK1_FORWARD_TO_GRAB = 0.8
-    TASK1_STOP_AFTER_GRAB = 0.5
-    
-    TASK2_STOP_BEFORE_FORWARD = 0.5
-    TASK2_FORWARD_TO_PLACE = 0.9
-    TASK2_STOP_AFTER_PLACE = 0.5
-    ```
+1. **相机连接问题**
+   ```bash
+   # 检查相机设备
+   ll /dev/gemini
+   
+   # 检查相机话题
+   ros2 topic list | grep camera
+   ```
 
-- **颜色设置**
-
-    ```python
-    SEARCH_COLOR = 'red'
-    COLOR_PRIORITY = [SEARCH_COLOR, 'yellow', 'black']
-    ```
-
-- **串口配置**
-
-    ```python
-    serial_port='/dev/ttyUSB0'
-    baudrate=115200
-    timeout=1
-    ```
-
-- **YOLO 模型路径**
-
-    ```python
-    model_path='train14.pt'
-    ```
-
-- **相机校准参数**
-
-    ```python
-    fx = 476.2635192871094
-    fy = 476.2635192871094
-    cx = 315.7132873535156
-    cy = 199.8099365234375
-    ```
-
-根据你的环境和硬件设置，适当调整这些参数。
-
-## 依赖项
-
-脚本依赖以下库和工具：
-
-- **OpenCV**：用于图像处理。
-- **ROS2 (`rclpy`, `sensor_msgs`, `cv_bridge`)**：用于与 ROS2 主题通信。
-- **NumPy**：用于数值运算。
-- **PyTorch & Ultralytics YOLO**：用于目标检测。
-- **Pygame**：用于处理摇杆输入。
-- **PySerial**：用于串口通信。
-- **Logging**：用于系统日志记录和调试。
-
-确保所有依赖项已安装并与您的 Python 版本兼容。
+2. **串口通信问题**
+   ```bash
+   # 检查串口权限
+   sudo chmod 666 /dev/ttyUSB0
+   
+   # 验证串口通信
+   python -m serial.tools.miniterm /dev/ttyUSB0 115200
+   ```
 
 ## 文件结构
 
-- **`2.py`**：包含自主系统的主要实现。
-- **`1.py`**：辅助脚本（此处未提供详细信息）。如果 `2.py` 依赖于此文件，请确保其位于相同目录中。
-- **`README.md`**：本文档文件。
+```
+robot_ws/
+├── src/
+│   ├── 2.py          # 主程序
+│   ├── 1.py          # 辅助程序
+│   └── README.md     # 说明文档
+└── install/
+    └── setup.bash    # 环境配置脚本
+```
 
-## 贡献指南
+## 注意事项
 
-欢迎贡献！请按照以下步骤进行：
-
-1. **Fork 仓库**
-
-2. **创建功能分支**
-
-    ```bash
-    git checkout -b feature/YourFeature
-    ```
-
-3. **提交更改**
-
-    ```bash
-    git commit -m "添加您的功能"
-    ```
-
-4. **推送到分支**
-
-    ```bash
-    git push origin feature/YourFeature
-    ```
-
-5. **创建 Pull Request**
-
-    提供清晰的更改描述及其背后的原因。
+1. 确保深度相机已正确连接并且能够正常发布图像话题
+2. 运行程序前检查串口权限和连接状态
+3. 确保YOLO模型文件(train14.pt)位于正确路径下
+4. 程序运行时需要有足够的计算资源支持实时图像处理
 
 ## 许可证
 
-本项目采用 [MIT 许可证](LICENSE)。
+本项目采用 MIT 许可证
+
+## 技术支持
+
+如有问题,请通过以下方式获取帮助:
+1. 提交GitHub Issue
+2. 查看ROS2 Foxy官方文档
+3. 参考Orbbec相机SDK文档
 
 ---
 
-*如有任何问题或建议，请在仓库中提交 issue 或直接联系维护者。*
+*更多详细信息请参考代码注释和ROS2官方文档*
