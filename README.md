@@ -9,7 +9,7 @@
 
 ## 概述
 
-`2.py`是一个基于ROS2 Foxy的自主目标检测与控制系统,主要用于实时物体检测和机器人控制。系统使用Orbbec深度相机获取RGB-D数据,通过YOLO模型进行目标检测,并结合深度信息实现物体的精确定位与抓取。
+`automatic.py`是一个基于ROS2 Foxy的自主目标检测与控制系统,主要用于实时物体检测和机器人控制。系统使用Orbbec深度相机获取RGB-D数据,通过YOLO模型进行目标检测,并结合深度信息实现物体的精确定位与抓取。
 
 ## 功能特性
 
@@ -122,7 +122,7 @@ cd ~/robot_ws
 source install/setup.bash
 
 # 运行程序
-python src/your_package/scripts/2.py
+python src/your_package/scripts/automatic.py
 ```
 
 ### 3. 操作说明
